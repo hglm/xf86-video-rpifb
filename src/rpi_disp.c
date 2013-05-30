@@ -420,9 +420,11 @@ int rpi_wait_for_vsync(rpi_disp_t *ctx)
  *
  * Can do accelerated fills only if the destination buffer is 
  * inside framebuffer. Returns FALSE (0) otherwise.
+ *
+ * Note: stride is units of 32-bit words.
  */
 
-int rpi_fill(void               *self,
+int rpi_fill(      void               *self,
                    uint32_t           *bits,
                    int                 stride,
                    int                 bpp,
@@ -473,6 +475,8 @@ int rpi_fill(void               *self,
  *
  * Can do G2D accelerated blits only if both source and destination
  * buffers are inside framebuffer. Returns FALSE (0) otherwise.
+ *
+ * Note src_stride and dst_stride are in units of 32-bit words.
  */
 int rpi_blt(void               *self,
                   uint32_t           *src_bits,
