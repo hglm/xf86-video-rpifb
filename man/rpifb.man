@@ -2,7 +2,7 @@
 .ds q \N'34'
 .TH SUNXIFB __drivermansuffix__ __vendorversion__
 .SH NAME
-rpifb \- video driver for the Raspberry Pi
+rpifb \- Xorg video driver for the Raspberry Pi
 .SH SYNOPSIS
 .nf
 .B "Section \*qDevice\*q"
@@ -16,7 +16,7 @@ rpifb \- video driver for the Raspberry Pi
 is an __xservername__ driver for the Raspberry Pi, derived from the xf86-video-sunxifb
 driver and from the
 .B fbdev driver.
-With the regard to 2D graphics, currently it only supports sofware rendering.
+With regard to 2D graphics, currently it only supports sofware rendering.
 However at least it tries to let the optimized code from the
 .B pixman
 library run at full speed without any unnecessary overhead. The recommended
@@ -28,7 +28,7 @@ driver supports all hardware where a framebuffer driver is available and
 uses the os-specific submodule fbdevhw(__drivermansuffix__) to talk
 to the kernel
 device driver.  Currently a fbdevhw module is available for linux.
-Additionally it is intended to use some of the display controller features
+Additionally it is intended to use some of the integrated features 
 from the Raspberry Pi such as DMA blitting.
 .SH CONFIGURATION DETAILS
 Please refer to __xconfigfile__(__filemansuffix__) for general configuration
@@ -62,7 +62,7 @@ only supported acceleration architecture is
 .B RPI.
 It is currently only provided for future implementation and provides no additional acceleration
 beyond the CPU optimizations. The default is
-.B no 2D hardware acceleration
+.B no 2D hardware acceleration.
 
 .SH "SEE ALSO"
 __xservername__(__appmansuffix__), __xconfigfile__(__filemansuffix__), Xserver(__appmansuffix__),
