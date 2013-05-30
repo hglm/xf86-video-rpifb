@@ -35,21 +35,41 @@
  * except for the case of rightwards overlapped blits, which are always
  * faster using the ARM-optimized functions defined here.
  */
-#define ARM_BLT_WIDTH_THRESHOLD 40
+#define ARM_BLT_WIDTH_THRESHOLD_32BPP 40
+#define ARM_BLT_WIDTH_THRESHOLD_16BPP 60
 
 #ifdef __arm__
 
 /*
  * NEON optimizations disabled for Raspberry Pi.
- * Instead, we use standard memcpy, which is supposed to be pretty optimized,
+ * Instead, we use standard memcpy, which is supposed to be pretty optimized on the
+ * RPi platform.
  */
 
 static void writeback_scratch_to_mem_arm(int size, void *dst, const void *src) {
     memcpy(dst, src, size);
 }
 
+/* For this function, src and dst are 32-byte aligned, and size is a multiple of 32. */
+
 static void aligned_fetch_fbmem_to_scratch_arm(int size, void *dst, const void *src) {
+#if 1
     memcpy(dst, src, size);
+#else
+    while (size >= 32) {
+        *(uint32_t *)dst = *(uint32_t *)src;
+        *((uint32_t *)dst + 1) = *((uint32_t *)src + 1);
+        *((uint32_t *)dst + 2) = *((uint32_t *)src + 2);
+        *((uint32_t *)dst + 3) = *((uint32_t *)src + 3);
+        *((uint32_t *)dst + 4) = *((uint32_t *)src + 4);
+        *((uint32_t *)dst + 5) = *((uint32_t *)src + 5);
+        *((uint32_t *)dst + 6) = *((uint32_t *)src + 6);
+        *((uint32_t *)dst + 7) = *((uint32_t *)src + 7);
+        src = (uint32_t *)src + 8;
+        dst = (uint32_t *)dst + 8; 
+        size -= 32;
+    }
+#endif
 }
 
 #define SCRATCHSIZE 2048
@@ -163,7 +183,8 @@ overlapped_blt_arm(void     *self,
      * catch the fact that for rightwards overlapped blits, overlapped_blt_arm
      * is almost always faster, even for small sizes.
      */
-    if (width < ARM_BLT_WIDTH_THRESHOLD
+    if (((src_bpp == 16 && width < ARM_BLT_WIDTH_THRESHOLD_16BPP) ||
+    (src_bpp == 32 && width < ARM_BLT_WIDTH_THRESHOLD_32BPP))
     && !(src_y == dst_y && src_x < dst_x && src_x + width >= dst_x))
         return 0;
     uint8_t *dst_bytes = (uint8_t *)dst_bits;
