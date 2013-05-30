@@ -30,13 +30,27 @@
 #include "cpuinfo.h"
 #include "cpu_backend.h"
 
+/*
+ * Threshold width, below which we fall to a more compact CPU blit function,
+ * except for the case of rightwards overlapped blits, which are always
+ * faster using the ARM-optimized functions defined here.
+ */
+#define ARM_BLT_WIDTH_THRESHOLD 40
+
 #ifdef __arm__
-#if 0
 
-/* NEON optimizations disabled for Raspberry Pi. */
+/*
+ * NEON optimizations disabled for Raspberry Pi.
+ * Instead, we use standard memcpy, which is supposed to be pretty optimized,
+ */
 
-void writeback_scratch_to_mem_neon(int size, void *dst, const void *src);
-void aligned_fetch_fbmem_to_scratch_neon(int size, void *dst, const void *src);
+static void writeback_scratch_to_mem_arm(int size, void *dst, const void *src) {
+    memcpy(dst, src, size);
+}
+
+static void aligned_fetch_fbmem_to_scratch_arm(int size, void *dst, const void *src) {
+    memcpy(dst, src, size);
+}
 
 #define SCRATCHSIZE 2048
 
@@ -50,7 +64,7 @@ void aligned_fetch_fbmem_to_scratch_neon(int size, void *dst, const void *src);
  * to the source buffer, the whole chunk is going to be read).
  */
 static void
-twopass_memmove_neon(void *dst_, const void *src_, size_t size)
+twopass_memmove_arm(void *dst_, const void *src_, size_t size)
 {
     uint8_t tmpbuf[SCRATCHSIZE + 32 + 31];
     uint8_t *scratchbuf = (uint8_t *)((uintptr_t)(&tmpbuf[0] + 31) & ~31);
@@ -61,17 +75,17 @@ twopass_memmove_neon(void *dst_, const void *src_, size_t size)
 
     if (src > dst) {
         while (size >= SCRATCHSIZE) {
-            aligned_fetch_fbmem_to_scratch_neon(SCRATCHSIZE + extrasize,
+            aligned_fetch_fbmem_to_scratch_arm(SCRATCHSIZE + extrasize,
                                                 scratchbuf, src - alignshift);
-            writeback_scratch_to_mem_neon(SCRATCHSIZE, dst, scratchbuf + alignshift);
+            writeback_scratch_to_mem_arm(SCRATCHSIZE, dst, scratchbuf + alignshift);
             size -= SCRATCHSIZE;
             dst += SCRATCHSIZE;
             src += SCRATCHSIZE;
         }
         if (size > 0) {
-            aligned_fetch_fbmem_to_scratch_neon(size + extrasize,
+            aligned_fetch_fbmem_to_scratch_arm(size + extrasize,
                                                 scratchbuf, src - alignshift);
-            writeback_scratch_to_mem_neon(size, dst, scratchbuf + alignshift);
+            writeback_scratch_to_mem_arm(size, dst, scratchbuf + alignshift);
         }
     }
     else {
@@ -80,23 +94,23 @@ twopass_memmove_neon(void *dst_, const void *src_, size_t size)
         src += size - remainder;
         size -= remainder;
         if (remainder) {
-            aligned_fetch_fbmem_to_scratch_neon(remainder + extrasize,
+            aligned_fetch_fbmem_to_scratch_arm(remainder + extrasize,
                                                 scratchbuf, src - alignshift);
-            writeback_scratch_to_mem_neon(remainder, dst, scratchbuf + alignshift);
+            writeback_scratch_to_mem_arm(remainder, dst, scratchbuf + alignshift);
         }
         while (size > 0) {
             dst -= SCRATCHSIZE;
             src -= SCRATCHSIZE;
             size -= SCRATCHSIZE;
-            aligned_fetch_fbmem_to_scratch_neon(SCRATCHSIZE + extrasize,
+            aligned_fetch_fbmem_to_scratch_arm(SCRATCHSIZE + extrasize,
                                                 scratchbuf, src - alignshift);
-            writeback_scratch_to_mem_neon(SCRATCHSIZE, dst, scratchbuf + alignshift);
+            writeback_scratch_to_mem_arm(SCRATCHSIZE, dst, scratchbuf + alignshift);
         }
     }
 }
 
 static void
-twopass_blt_8bpp_neon(int        width,
+twopass_blt_8bpp_arm(int        width,
                       int        height,
                       uint8_t   *dst_bytes,
                       uintptr_t  dst_stride,
@@ -114,7 +128,7 @@ twopass_blt_8bpp_neon(int        width,
         {
             while (--height >= 0)
             {
-                twopass_memmove_neon(dst_bytes, src_bytes, width);
+                twopass_memmove_arm(dst_bytes, src_bytes, width);
                 dst_bytes += dst_stride;
                 src_bytes += src_stride;
             }
@@ -123,14 +137,14 @@ twopass_blt_8bpp_neon(int        width,
     }
     while (--height >= 0)
     {
-        twopass_memmove_neon(dst_bytes, src_bytes, width);
+        twopass_memmove_arm(dst_bytes, src_bytes, width);
         dst_bytes += dst_stride;
         src_bytes += src_stride;
     }
 }
 
 static int
-overlapped_blt_neon(void     *self,
+overlapped_blt_arm(void     *self,
                     uint32_t *src_bits,
                     uint32_t *dst_bits,
                     int       src_stride,
@@ -144,6 +158,14 @@ overlapped_blt_neon(void     *self,
                     int       width,
                     int       height)
 {
+    /*
+     * Heuristic for falling back to more compact CPU blit; this tries to
+     * catch the fact that for rightwards overlapped blits, overlapped_blt_arm
+     * is almost always faster, even for small sizes.
+     */
+    if (width < ARM_BLT_WIDTH_THRESHOLD
+    && !(src_y == dst_y && src_x < dst_x && src_x + width >= dst_x))
+        return 0;
     uint8_t *dst_bytes = (uint8_t *)dst_bits;
     uint8_t *src_bytes = (uint8_t *)src_bits;
     cpu_backend_t *ctx = (cpu_backend_t *)self;
@@ -156,7 +178,7 @@ overlapped_blt_neon(void     *self,
     if (src_bpp != dst_bpp || src_bpp & 7 || src_stride < 0 || dst_stride < 0)
         return 0;
 
-    twopass_blt_8bpp_neon((uintptr_t) width * bpp,
+    twopass_blt_8bpp_arm((uintptr_t) width * bpp,
                           height,
                           dst_bytes + (uintptr_t) dst_y * dst_stride * 4 +
                                       (uintptr_t) dst_x * bpp,
@@ -167,7 +189,6 @@ overlapped_blt_neon(void     *self,
     return 1;
 }
 
-#endif
 #endif
 
 /* An empty, always failing implementation */
@@ -226,6 +247,7 @@ cpu_backend_t *cpu_backend_init(uint8_t *uncached_buffer,
         ctx->blt2d.overlapped_blt = overlapped_blt_neon;
     }
 #endif
+    ctx->blt2d.overlapped_blt = overlapped_blt_arm;
 #endif
 
     return ctx;
