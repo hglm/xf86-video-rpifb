@@ -1,4 +1,4 @@
-xf86-video-rpi - Xorg video driver for the Raspberry Pi
+xf86-video-rpi - experimental Xorg video driver for the Raspberry Pi
 
 Based on xf86-video-sunxi, and on the Xorg fbdev driver.
 
