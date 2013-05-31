@@ -182,7 +182,7 @@ xCopyNtoN(DrawablePtr pSrcDrawable,
         int h = pbox->y2 - pbox->y1;
         Bool done = FALSE;
         /*
-         * Since the accelerated functions only work when the source is in the
+         * Since the accelerated functions only works when the source is in the
          * framebuffer, only try them if the source is a window. This avoids
          * the function call overhead for the case when the source is not a
          * a window.
@@ -374,6 +374,8 @@ static void xPolyFillRect(DrawablePtr pDrawable,
     Bool outside_framebuffer;
     pPriv = fbGetGCPrivate(pGC);
     FbBits pm = pPriv->pm;
+    Bool try_blt2d_fill, try_pixman_fill;
+
     if (pGC->fillStyle != FillSolid || pm != FB_ALLONES || pPriv->and) {
         fbPolyFillRect(pDrawable, pGC, nrect, prect);
         return;
@@ -389,6 +391,18 @@ static void xPolyFillRect(DrawablePtr pDrawable,
 
     xorg = pDrawable->x;
     yorg = pDrawable->y;
+
+    if (!pPriv->and) {
+        if (private->blt2d_fill != NULL)
+            try_blt2d_fill = TRUE;
+        else
+            try_blt2d_fill = FALSE;
+        try_pixman_fill = TRUE;
+    }
+    else {
+        try_blt2d_fill = FALSE;
+        try_pixman_fill = FALSE;
+    }
 
     pextent = REGION_EXTENTS(pGC->pScreen, pClip);
     extentX1 = pextent->x1;
@@ -426,11 +440,14 @@ static void xPolyFillRect(DrawablePtr pDrawable,
             y = fullY1 + dstYoff;
             w = fullX2 - fullX1;
             h = fullY2 - fullY1;
-            if (!pPriv->and)
+            if (try_blt2d_fill)
                 done = private->blt2d_fill(private->blt2d_self, (uint32_t *)dst, dstStride, dstBpp, x, y, w, h, pPriv->xor);
-            if (!done)
-                if (pPriv->and || !pixman_fill((uint32_t *)dst, dstStride, dstBpp, x, y, w, h, pPriv->xor))
+            if (!done) {
+                if (try_pixman_fill)
+                    done = pixman_fill((uint32_t *)dst, dstStride, dstBpp, x, y, w, h, pPriv->xor);
+                if (!done)
                     fbSolid(dst + y * dstStride, dstStride, x * dstBpp, dstBpp, w * dstBpp, h, pPriv->and, pPriv->xor);
+            }
         }
         else
         {
@@ -463,11 +480,14 @@ static void xPolyFillRect(DrawablePtr pDrawable,
                     int y = partY1 + dstYoff;
                     w = partX2 - partX1;
                     h = partY2 - partY1;
-                    if (!pPriv->and)
+                    if (try_blt2d_fill)
                         done = private->blt2d_fill(private->blt2d_self, (uint32_t *)dst, dstStride, dstBpp, x, y, w, h, pPriv->xor);
-                    if (!done)
-                        if (pPriv->and || !pixman_fill((uint32_t *)dst, dstStride, dstBpp, x, y, w, h, pPriv->xor))
+                    if (!done) {
+                        if (try_pixman_fill)
+                            done = pixman_fill((uint32_t *)dst, dstStride, dstBpp, x, y, w, h, pPriv->xor);
+                        if (!done)
                             fbSolid(dst + y * dstStride, dstStride, x * dstBpp, dstBpp, w * dstBpp, h, pPriv->and, pPriv->xor);
+                    }
                 }
             }
         }

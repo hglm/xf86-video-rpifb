@@ -258,7 +258,11 @@ cpu_backend_t *cpu_backend_init(uint8_t *uncached_buffer,
 
     ctx->blt2d.self = ctx;
     ctx->blt2d.overlapped_blt = overlapped_blt_noop;
-    ctx->blt2d.fill = fill_noop;
+    /*
+     * Initialize the fill function with NULL to indicate that is not
+     * available.
+     */
+    ctx->blt2d.fill = NULL;
 
     ctx->cpuinfo = cpuinfo_init();
 
