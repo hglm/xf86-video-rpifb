@@ -1,5 +1,5 @@
 This is the comparison of the results of running benchx
-(https//github.com/hglm/bench) on both the standard
+(https//github.com/hglm/benchx) on both the standard
 driver (fbdev) and the xf86-video-rpifb driver.
 
 Resolution is 1280x1024, pixel depth 16bpp, 512MB RPi

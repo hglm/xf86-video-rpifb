@@ -884,10 +884,7 @@ FBDevScreenInit(SCREEN_INIT_ARGS_DECL)
 						strcasecmp(accelmethod, "rpi") == 0) {
 		rpi_disp_t *disp = fPtr->rpi_disp_private;
                 blt2d_i *cpu_backend_blt2d;
-                if (cpu_backend->cpuinfo->has_arm_neon)
-                    cpu_backend_blt2d = &cpu_backend->blt2d;
-                else
-                    cpu_backend_blt2d = NULL;
+                cpu_backend_blt2d = &cpu_backend->blt2d;
 		if (disp && /* accel accessible && */
 		    (fPtr->RPIAccel_private = RPIAccel_Init(pScreen, &disp->blt2d,
                     cpu_backend_blt2d))) {
