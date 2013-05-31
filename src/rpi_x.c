@@ -180,7 +180,15 @@ xCopyNtoN(DrawablePtr pSrcDrawable,
          */
         int w = pbox->x2 - pbox->x1;
         int h = pbox->y2 - pbox->y1;
-        Bool done = private->blt2d_overlapped_blt(
+        Bool done = FALSE;
+        /*
+         * Since the accelerated functions only work when the source is in the
+         * framebuffer, only try them if the source is a window. This avoids
+         * the function call overhead for the case when the source is not a
+         * a window.
+         */
+        if (pSrcDrawable->type == DRAWABLE_WINDOW) {
+            done = private->blt2d_overlapped_blt(
                              private->blt2d_self,
                              (uint32_t *)src, (uint32_t *)dst,
                              srcStride, dstStride,
@@ -189,9 +197,9 @@ xCopyNtoN(DrawablePtr pSrcDrawable,
                              (pbox->y1 + dstYoff), w,
                              h);
 
-        /* When using acceleration, try the ARM CPU back end as fallback. */
-        if (!done && private->blt2d_cpu_backend != NULL)
-            done = private->blt2d_cpu_backend->overlapped_blt(
+            /* When using acceleration, try the ARM CPU back end as fallback. */
+            if (!done && private->blt2d_cpu_backend != NULL)
+                done = private->blt2d_cpu_backend->overlapped_blt(
                              private->blt2d_cpu_backend->self,
                              (uint32_t *)src, (uint32_t *)dst,
                              srcStride, dstStride,
@@ -199,6 +207,7 @@ xCopyNtoN(DrawablePtr pSrcDrawable,
                              (pbox->y1 + dy + srcYoff), (pbox->x1 + dstXoff),
                              (pbox->y1 + dstYoff), w,
                              h);
+        }
 
         /* then pixman */
         if (!done && !reverse && !upsidedown) {
