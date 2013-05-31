@@ -1,0 +1,82 @@
+This is the comparison of the results of running benchx
+(https//github.com/hglm/bench) on both the standard
+driver (fbdev) and the xf86-video-rpifb driver.
+
+Resolution is 1280x1024, pixel depth 16bpp, 512MB RPi
+with no overclocking. The "ShadowFB" option in the
+xorg.conf file was set to "Off".
+
+Processed 209 results in fbdev-16bpp.out.
+Processed 209 results in rpifb-release-16bpp.out.
+ScreenCopy (73 x 73): Speed up 21%
+ScreenCopy (109 x 109): Speed up 76%
+ScreenCopy (163 x 163): Speed up 102%
+ScreenCopy (244 x 244): Speed up 100%
+ScreenCopy (366 x 366): Speed up 76%
+ScreenCopy (549 x 549): Speed up 78%
+AlignedScreenCopy (5 x 5): Slow down 5%
+AlignedScreenCopy (73 x 73): Slow down 22%
+AlignedScreenCopy (163 x 163): Speed up 14%
+AlignedScreenCopy (244 x 244): Speed up 13%
+AlignedScreenCopy (366 x 366): Speed up 15%
+AlignedScreenCopy (549 x 549): Speed up 16%
+ScreenCopyDownwards (5 x 5): Slow down 9%
+ScreenCopyDownwards (7 x 7): Slow down 8%
+ScreenCopyDownwards (10 x 10): Slow down 9%
+ScreenCopyDownwards (15 x 15): Slow down 5%
+ScreenCopyDownwards (73 x 73): Speed up 23%
+ScreenCopyDownwards (163 x 163): Speed up 13%
+ScreenCopyDownwards (244 x 244): Speed up 12%
+ScreenCopyDownwards (366 x 366): Speed up 13%
+ScreenCopyDownwards (549 x 549): Speed up 14%
+ScreenCopyRightwards (5 x 5): Slow down 9%
+ScreenCopyRightwards (7 x 7): Slow down 8%
+ScreenCopyRightwards (22 x 22): Speed up 20%
+ScreenCopyRightwards (33 x 33): Speed up 37%
+ScreenCopyRightwards (49 x 49): Speed up 65%
+ScreenCopyRightwards (73 x 73): Speed up 100%
+ScreenCopyRightwards (109 x 109): Speed up 202%
+ScreenCopyRightwards (163 x 163): Speed up 265%
+ScreenCopyRightwards (244 x 244): Speed up 264%
+ScreenCopyRightwards (366 x 366): Speed up 193%
+ScreenCopyRightwards (549 x 549): Speed up 200%
+FillRect (5 x 5): Speed up 11%
+FillRect (7 x 7): Speed up 17%
+FillRect (10 x 10): Speed up 18%
+FillRect (15 x 15): Speed up 9%
+FillRect (22 x 22): Speed up 6%
+PutImage (15 x 15): Speed up 8%
+PutImage (22 x 22): Speed up 9%
+PutImage (33 x 33): Speed up 7%
+PutImage (49 x 49): Speed up 12%
+PutImage (73 x 73): Speed up 13%
+PutImage (109 x 109): Speed up 19%
+PutImage (163 x 163): Speed up 20%
+PutImage (244 x 244): Speed up 25%, CPU usage decrease from 60% to 50%
+PutImage (366 x 366): Speed up 26%
+PutImage (549 x 549): Speed up 28%, CPU usage decrease from 64% to 54%
+ShmPutImage (5 x 5): Slow down 8%
+ShmPutImage (7 x 7): Slow down 8%
+ShmPutImage (10 x 10): Slow down 7%
+ShmPutImage (15 x 15): Slow down 7%
+ShmPutImage (22 x 22): Slow down 8%
+ShmPutImage (33 x 33): Slow down 6%
+ShmPutImage (49 x 49): Slow down 5%
+ShmPutImage (73 x 73): Slow down 5%
+AlignedShmPutImage (5 x 5): Slow down 8%
+AlignedShmPutImage (7 x 7): Slow down 8%
+AlignedShmPutImage (10 x 10): Slow down 7%
+AlignedShmPutImage (15 x 15): Slow down 7%
+AlignedShmPutImage (22 x 22): Slow down 8%
+AlignedShmPutImage (33 x 33): Slow down 7%
+AlignedShmPutImage (49 x 49): Slow down 5%
+AlignedShmPutImage (73 x 73): Slow down 6%
+ShmPixmapToScreenCopy (163 x 163): Slow down 8%
+ShmPixmapToScreenCopy (244 x 244): Slow down 7%
+AlignedShmPixmapToScreenCopy (163 x 163): Slow down 11%
+AlignedShmPixmapToScreenCopy (244 x 244): Slow down 8%
+PixmapFillRect (7 x 7): Slow down 6%
+PixmapFillRect (10 x 10): Slow down 9%
+PixmapFillRect (15 x 15): Slow down 7%
+PixmapFillRect (22 x 22): Slow down 5%
+XRenderShmPixmap (163 x 163): Slow down 8%
