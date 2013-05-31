@@ -71,14 +71,16 @@ xCopyWindowProc(DrawablePtr pSrcDrawable,
     fbGetDrawable(pDstDrawable, dst, dstStride, dstBpp, dstXoff, dstYoff);
 
     while (nbox--) {
+        int w = pbox->x2 - pbox->x1;
+        int h = pbox->y2 - pbox->y1;
         Bool done;
         done = private->blt2d_overlapped_blt(private->blt2d_self,
                                            (uint32_t *)src, (uint32_t *)dst,
                                            srcStride, dstStride,
                                            srcBpp, dstBpp, (pbox->x1 + dx + srcXoff),
                                            (pbox->y1 + dy + srcYoff), (pbox->x1 + dstXoff),
-                                           (pbox->y1 + dstYoff), (pbox->x2 - pbox->x1),
-                                           (pbox->y2 - pbox->y1));
+                                           (pbox->y1 + dstYoff), w,
+                                           h);
         /* When using acceleration, try the ARM CPU back end as fallback. */
         if (!done && private->blt2d_cpu_backend != NULL)
             done = private->blt2d_cpu_backend->overlapped_blt(
@@ -87,8 +89,8 @@ xCopyWindowProc(DrawablePtr pSrcDrawable,
                              srcStride, dstStride,
                              srcBpp, dstBpp, (pbox->x1 + dx + srcXoff),
                              (pbox->y1 + dy + srcYoff), (pbox->x1 + dstXoff),
-                             (pbox->y1 + dstYoff), (pbox->x2 - pbox->x1),
-                             (pbox->y2 - pbox->y1));
+                             (pbox->y1 + dstYoff), w,
+                             h);
         if (!done)
             /* fallback to fbBlt */
             fbBlt(src + (pbox->y1 + dy + srcYoff) * srcStride,
@@ -97,8 +99,8 @@ xCopyWindowProc(DrawablePtr pSrcDrawable,
                   dst + (pbox->y1 + dstYoff) * dstStride,
                   dstStride,
                   (pbox->x1 + dstXoff) * dstBpp,
-                  (pbox->x2 - pbox->x1) * dstBpp,
-                  (pbox->y2 - pbox->y1),
+                  w * dstBpp,
+                  h,
                   GXcopy, FB_ALLONES, dstBpp, reverse, upsidedown);
         pbox++;
     }
@@ -173,17 +175,19 @@ xCopyNtoN(DrawablePtr pSrcDrawable,
          *    private->blt2d_overlapped_blt is the hardware blit function.
          *    private->blt2d_cpu_back_end is NULL.
          * 3. Use the ARM CPU back-end only.
-         *    private->blt2d_overlapped_blt is the NEON CPU back-end blit function.
+         *    private->blt2d_overlapped_blt is the ARM CPU back-end blit function.
          *    private->blt2d_cpu_back_end is NULL.
          */
+        int w = pbox->x2 - pbox->x1;
+        int h = pbox->y2 - pbox->y1;
         Bool done = private->blt2d_overlapped_blt(
                              private->blt2d_self,
                              (uint32_t *)src, (uint32_t *)dst,
                              srcStride, dstStride,
                              srcBpp, dstBpp, (pbox->x1 + dx + srcXoff),
                              (pbox->y1 + dy + srcYoff), (pbox->x1 + dstXoff),
-                             (pbox->y1 + dstYoff), (pbox->x2 - pbox->x1),
-                             (pbox->y2 - pbox->y1));
+                             (pbox->y1 + dstYoff), w,
+                             h);
 
         /* When using acceleration, try the ARM CPU back end as fallback. */
         if (!done && private->blt2d_cpu_backend != NULL)
@@ -193,16 +197,16 @@ xCopyNtoN(DrawablePtr pSrcDrawable,
                              srcStride, dstStride,
                              srcBpp, dstBpp, (pbox->x1 + dx + srcXoff),
                              (pbox->y1 + dy + srcYoff), (pbox->x1 + dstXoff),
-                             (pbox->y1 + dstYoff), (pbox->x2 - pbox->x1),
-                             (pbox->y2 - pbox->y1));
+                             (pbox->y1 + dstYoff), w,
+                             h);
 
         /* then pixman */
         if (!done && !reverse && !upsidedown) {
             done = pixman_blt((uint32_t *)src, (uint32_t *)dst, srcStride, dstStride,
                  srcBpp, dstBpp, (pbox->x1 + dx + srcXoff),
                  (pbox->y1 + dy + srcYoff), (pbox->x1 + dstXoff),
-                 (pbox->y1 + dstYoff), (pbox->x2 - pbox->x1),
-                 (pbox->y2 - pbox->y1));
+                 (pbox->y1 + dstYoff), w,
+                 h);
         }
 
         /* fallback to fbBlt if other methods did not work */
@@ -215,8 +219,8 @@ xCopyNtoN(DrawablePtr pSrcDrawable,
                   dst + (pbox->y1 + dstYoff) * dstStride,
                   dstStride,
                   (pbox->x1 + dstXoff) * dstBpp,
-                  (pbox->x2 - pbox->x1) * dstBpp,
-                  (pbox->y2 - pbox->y1), GXcopy, FB_ALLONES, dstBpp, reverse, upsidedown);
+                  w * dstBpp,
+                  h, GXcopy, FB_ALLONES, dstBpp, reverse, upsidedown);
         }
         pbox++;
     }
@@ -314,7 +318,7 @@ void xPutImage(DrawablePtr pDrawable,
         Bool done = FALSE;
         int w = x2 - x1;
         int h = y2 - y1;
-        /* first try pixman (NEON) */
+        /* first try pixman (ARM) */
         if (!done) {
             done = pixman_blt((uint32_t *)src, (uint32_t *)dst, srcStride, dstStride,
                  dstBpp, dstBpp, x1 - x,
