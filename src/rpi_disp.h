@@ -106,7 +106,7 @@ int sunxi_layer_hide(sunxi_disp_t *ctx);
 int rpi_wait_for_vsync(rpi_disp_t *ctx);
 
 /* 
- * The following constants are used in sunxi_disp.c and represent
+ * The following constants are used in rpi_disp.c and represent
  * the area threshold for falling back to CPU fill.
  */
 #define RPI_FILL_SIZE_THRESHOLD_32BPP 5000
