@@ -25,6 +25,7 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h> // For debugging.
 #include <string.h>
 
 #include "cpuinfo.h"
@@ -40,9 +41,11 @@
 
 #ifdef __arm__
 
+static void writeback_scratch_to_mem_arm(int size, void *dst, const void *src);
+void aligned_fetch_fbmem_to_scratch_arm(int size, void *dst, const void *src);
+
 /*
- * NEON optimizations disabled for Raspberry Pi.
- * Instead, we use standard memcpy, which is supposed to be pretty optimized on the
+ * We use standard memcpy, which is supposed to be pretty optimized on the
  * RPi platform.
  */
 
@@ -50,27 +53,18 @@ static void writeback_scratch_to_mem_arm(int size, void *dst, const void *src) {
     memcpy(dst, src, size);
 }
 
-/* For this function, src and dst are 32-byte aligned, and size is a multiple of 32. */
+/*
+ * For this function, src and dst are 32-byte aligned.
+ * ARM assembler implemention is used.
+ */
+
+#if 0
 
 static void aligned_fetch_fbmem_to_scratch_arm(int size, void *dst, const void *src) {
-#if 1
     memcpy(dst, src, size);
-#else
-    while (size >= 32) {
-        *(uint32_t *)dst = *(uint32_t *)src;
-        *((uint32_t *)dst + 1) = *((uint32_t *)src + 1);
-        *((uint32_t *)dst + 2) = *((uint32_t *)src + 2);
-        *((uint32_t *)dst + 3) = *((uint32_t *)src + 3);
-        *((uint32_t *)dst + 4) = *((uint32_t *)src + 4);
-        *((uint32_t *)dst + 5) = *((uint32_t *)src + 5);
-        *((uint32_t *)dst + 6) = *((uint32_t *)src + 6);
-        *((uint32_t *)dst + 7) = *((uint32_t *)src + 7);
-        src = (uint32_t *)src + 8;
-        dst = (uint32_t *)dst + 8; 
-        size -= 32;
-    }
-#endif
 }
+
+#endif
 
 #define SCRATCHSIZE 2048
 
