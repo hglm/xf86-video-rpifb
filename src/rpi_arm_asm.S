@@ -79,16 +79,9 @@ asm_function aligned_fetch_fbmem_to_scratch_arm
 0:
     /*
      * Aligned load from the source (framebuffer).
-     * The following lines of code were unceremoniously extracted
-     * from Simon H and tufty's memcpy inner loop used in
-     * Raspbian memcpy.
-      */
-    ldmia       SRC!, {r4, r7}
-    ldmia       SRC!, {r8, r11}
-    stmia       DST!, {r4, r7}
-    pld         [SRC, #128]
+     * To be implemented.
+     */
     subs        SIZE, SIZE, #32
-    stmia       DST!, {r8, r11}
     bne          0b
 1:
     pop         {r4, r11}

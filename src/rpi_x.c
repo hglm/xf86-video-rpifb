@@ -42,6 +42,14 @@
 #include "rpi_x.h"
 
 /*
+ * If USE_STANDARD_BLT is defined, use the standard_blt function from the
+ * device-independent interface instead of pixman. Pixman is significantly
+ * faster at the moment.
+ */
+
+/* #define USE_STANDARD_BLT */
+
+/*
  * The code below is borrowed from "xserver/fb/fbwindow.c"
  */
 
@@ -163,15 +171,22 @@ xCopyNtoN(DrawablePtr pSrcDrawable,
     ScreenPtr pScreen = pDstDrawable->pScreen;
     ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
     RPIAccel *private = RPI_ACCEL(pScrn);
-    Bool try_pixman;
+    Bool try_pixman, try_standard_blt;
 
     fbGetDrawable(pSrcDrawable, src, srcStride, srcBpp, srcXoff, srcYoff);
     fbGetDrawable(pDstDrawable, dst, dstStride, dstBpp, dstXoff, dstYoff);
 
+#ifdef USE_STANDARD_BLT
+    if (!reverse && !upsidedown && private->blt2d_standard_blt != NULL)
+        try_standard_blt= TRUE;
+    else
+        try_standard_blt = FALSE;
+#else
     if (!reverse && !upsidedown)
         try_pixman = TRUE;
     else
         try_pixman = FALSE;
+#endif
 
     while (nbox--) {
         /*
@@ -210,13 +225,24 @@ xCopyNtoN(DrawablePtr pSrcDrawable,
                              h);
 
             if (!done) {
-                /* then pixman */
+                /* then standard_blt or pixman */
+#ifdef USE_STANDARD_BLT
+                if (try_standard_blt)
+                    done = private->blt2d_standard_blt(
+                        private->blt2d_self,
+                        (uint32_t *)src, (uint32_t *)dst, srcStride, dstStride,
+                        srcBpp, dstBpp, (pbox->x1 + dx + srcXoff),
+                        (pbox->y1 + dy + srcYoff), (pbox->x1 + dstXoff),
+                        (pbox->y1 + dstYoff), w,
+                        h);
+#else
                 if (try_pixman)
                     done = pixman_blt((uint32_t *)src, (uint32_t *)dst, srcStride, dstStride,
                         srcBpp, dstBpp, (pbox->x1 + dx + srcXoff),
                         (pbox->y1 + dy + srcYoff), (pbox->x1 + dstXoff),
                         (pbox->y1 + dstYoff), w,
                         h);
+#endif
 
                 /* fallback to fbBlt if other methods did not work */
                 if (!done)
@@ -330,11 +356,22 @@ void xPutImage(DrawablePtr pDrawable,
         int h = y2 - y1;
         /* first try pixman (ARM) */
         if (!done)
+#ifdef USE_STANDARD_BLT
+            if (private->blt2d_standard_blt != NULL)
+                done = private->blt2d_standard_blt(
+                    private->blt2d_self,
+                    (uint32_t *)src, (uint32_t *)dst, srcStride, dstStride,
+                    dstBpp, dstBpp, x1 - x,
+                    y1 - y, x1 + dstXoff,
+                    y1 + dstYoff, w,
+                    h);
+#else
             done = pixman_blt((uint32_t *)src, (uint32_t *)dst, srcStride, dstStride,
                  dstBpp, dstBpp, x1 - x,
                  y1 - y, x1 + dstXoff,
                  y1 + dstYoff, w,
                  h);
+#endif
         // otherwise fall back to fb */
         if (!done)
             fbBlt(src + (y1 - y) * srcStride,
