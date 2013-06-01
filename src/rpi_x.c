@@ -82,8 +82,9 @@ xCopyWindowProc(DrawablePtr pSrcDrawable,
                                            (pbox->y1 + dstYoff), w,
                                            h);
         /* When using acceleration, try the ARM CPU back end as fallback. */
-        if (!done && private->blt2d_cpu_backend != NULL)
-            done = private->blt2d_cpu_backend->overlapped_blt(
+        if (!done) {
+            if (private->blt2d_cpu_backend != NULL)
+                done = private->blt2d_cpu_backend->overlapped_blt(
                              private->blt2d_cpu_backend->self,
                              (uint32_t *)src, (uint32_t *)dst,
                              srcStride, dstStride,
@@ -91,9 +92,9 @@ xCopyWindowProc(DrawablePtr pSrcDrawable,
                              (pbox->y1 + dy + srcYoff), (pbox->x1 + dstXoff),
                              (pbox->y1 + dstYoff), w,
                              h);
-        if (!done)
-            /* fallback to fbBlt */
-            fbBlt(src + (pbox->y1 + dy + srcYoff) * srcStride,
+            if (!done)
+                /* fallback to fbBlt */
+                fbBlt(src + (pbox->y1 + dy + srcYoff) * srcStride,
                   srcStride,
                   (pbox->x1 + dx + srcXoff) * srcBpp,
                   dst + (pbox->y1 + dstYoff) * dstStride,
@@ -102,6 +103,7 @@ xCopyWindowProc(DrawablePtr pSrcDrawable,
                   w * dstBpp,
                   h,
                   GXcopy, FB_ALLONES, dstBpp, reverse, upsidedown);
+        }
         pbox++;
     }
 
@@ -161,9 +163,15 @@ xCopyNtoN(DrawablePtr pSrcDrawable,
     ScreenPtr pScreen = pDstDrawable->pScreen;
     ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
     RPIAccel *private = RPI_ACCEL(pScrn);
+    Bool try_pixman;
 
     fbGetDrawable(pSrcDrawable, src, srcStride, srcBpp, srcXoff, srcYoff);
     fbGetDrawable(pDstDrawable, dst, dstStride, dstBpp, dstXoff, dstYoff);
+
+    if (!reverse && !upsidedown)
+        try_pixman = TRUE;
+    else
+        try_pixman = FALSE;
 
     while (nbox--) {
         /*
@@ -180,15 +188,8 @@ xCopyNtoN(DrawablePtr pSrcDrawable,
          */
         int w = pbox->x2 - pbox->x1;
         int h = pbox->y2 - pbox->y1;
-        Bool done = FALSE;
-        /*
-         * Since the accelerated functions only works when the source is in the
-         * framebuffer, only try them if the source is a window. This avoids
-         * the function call overhead for the case when the source is not a
-         * a window.
-         */
-        if (pSrcDrawable->type == DRAWABLE_WINDOW) {
-            done = private->blt2d_overlapped_blt(
+        Bool done;
+        done = private->blt2d_overlapped_blt(
                              private->blt2d_self,
                              (uint32_t *)src, (uint32_t *)dst,
                              srcStride, dstStride,
@@ -196,9 +197,9 @@ xCopyNtoN(DrawablePtr pSrcDrawable,
                              (pbox->y1 + dy + srcYoff), (pbox->x1 + dstXoff),
                              (pbox->y1 + dstYoff), w,
                              h);
-
+        if (!done) {
             /* When using acceleration, try the ARM CPU back end as fallback. */
-            if (!done && private->blt2d_cpu_backend != NULL)
+            if (private->blt2d_cpu_backend != NULL)
                 done = private->blt2d_cpu_backend->overlapped_blt(
                              private->blt2d_cpu_backend->self,
                              (uint32_t *)src, (uint32_t *)dst,
@@ -207,29 +208,29 @@ xCopyNtoN(DrawablePtr pSrcDrawable,
                              (pbox->y1 + dy + srcYoff), (pbox->x1 + dstXoff),
                              (pbox->y1 + dstYoff), w,
                              h);
-        }
 
-        /* then pixman */
-        if (!done && !reverse && !upsidedown) {
-            done = pixman_blt((uint32_t *)src, (uint32_t *)dst, srcStride, dstStride,
-                 srcBpp, dstBpp, (pbox->x1 + dx + srcXoff),
-                 (pbox->y1 + dy + srcYoff), (pbox->x1 + dstXoff),
-                 (pbox->y1 + dstYoff), w,
-                 h);
-        }
+            if (!done) {
+                /* then pixman */
+                if (try_pixman)
+                    done = pixman_blt((uint32_t *)src, (uint32_t *)dst, srcStride, dstStride,
+                        srcBpp, dstBpp, (pbox->x1 + dx + srcXoff),
+                        (pbox->y1 + dy + srcYoff), (pbox->x1 + dstXoff),
+                        (pbox->y1 + dstYoff), w,
+                        h);
 
-        /* fallback to fbBlt if other methods did not work */
-        if (!done) {
-            // Due to the check in xCopyArea, it is guaranteed that pGC->alu == GXcopy
-            // and the planemask is FB_ALLONES.
-            fbBlt(src + (pbox->y1 + dy + srcYoff) * srcStride,
-                  srcStride,
-                  (pbox->x1 + dx + srcXoff) * srcBpp,
-                  dst + (pbox->y1 + dstYoff) * dstStride,
-                  dstStride,
-                  (pbox->x1 + dstXoff) * dstBpp,
-                  w * dstBpp,
-                  h, GXcopy, FB_ALLONES, dstBpp, reverse, upsidedown);
+                /* fallback to fbBlt if other methods did not work */
+                if (!done)
+                    // Due to the check in xCopyArea, it is guaranteed that pGC->alu == GXcopy
+                    // and the planemask is FB_ALLONES.
+                    fbBlt(src + (pbox->y1 + dy + srcYoff) * srcStride,
+                        srcStride,
+                        (pbox->x1 + dx + srcXoff) * srcBpp,
+                        dst + (pbox->y1 + dstYoff) * dstStride,
+                        dstStride,
+                        (pbox->x1 + dstXoff) * dstBpp,
+                        w * dstBpp,
+                        h, GXcopy, FB_ALLONES, dstBpp, reverse, upsidedown);
+            }
         }
         pbox++;
     }
@@ -328,13 +329,12 @@ void xPutImage(DrawablePtr pDrawable,
         int w = x2 - x1;
         int h = y2 - y1;
         /* first try pixman (ARM) */
-        if (!done) {
+        if (!done)
             done = pixman_blt((uint32_t *)src, (uint32_t *)dst, srcStride, dstStride,
                  dstBpp, dstBpp, x1 - x,
                  y1 - y, x1 + dstXoff,
                  y1 + dstYoff, w,
                  h);
-        }
         // otherwise fall back to fb */
         if (!done)
             fbBlt(src + (y1 - y) * srcStride,
