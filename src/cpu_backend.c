@@ -42,7 +42,7 @@
 #ifdef __arm__
 
 static void writeback_scratch_to_mem_arm(int size, void *dst, const void *src);
-void aligned_fetch_fbmem_to_scratch_arm(int size, void *dst, const void *src);
+static void aligned_fetch_fbmem_to_scratch_arm(int size, void *dst, const void *src);
 
 /*
  * We use standard memcpy, which is supposed to be pretty optimized on the
@@ -55,10 +55,10 @@ static void writeback_scratch_to_mem_arm(int size, void *dst, const void *src) {
 
 /*
  * For this function, src and dst are 32-byte aligned.
- * ARM assembler implemention is used.
+ * ARM assembler implemention is available but doesn't work yet.
  */
 
-#if 0
+#if 1
 
 static void aligned_fetch_fbmem_to_scratch_arm(int size, void *dst, const void *src) {
     memcpy(dst, src, size);
@@ -267,7 +267,7 @@ cpu_backend_t *cpu_backend_init(uint8_t *uncached_buffer,
     }
 #endif
     ctx->blt2d.overlapped_blt = overlapped_blt_arm;
-    ctx->blt2d.standard_blt = standard_blt_arm;
+    ctx->blt2d.standard_blt = NULL;
 #endif
 
     return ctx;

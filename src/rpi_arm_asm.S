@@ -32,7 +32,7 @@
 
 .text
 .syntax unified
-.fpu neon
+.fpu vfp
 .arch armv6j
 .object_arch armv4
 .arm
@@ -59,27 +59,38 @@
  * by doing uncached reads from memory (for example framebuffer). We are
  * trying to do the largest possible perfectly aligned reads to fetch
  * data into a temporary scratch buffer in L1 cache.
+ *
+ * Assumptions: scratch and fbmem 32-byte aligned, numbytes >= 1.
  */
 
-asm_function aligned_fetch_fbmem_to_scratch_asm
+asm_function aligned_fetch_fbmem_to_scratch_arm
     SIZE        .req r0
     DST         .req r1
     SRC         .req r2
 
-    push       {r4, r11}
+    push        {r4, r11}
     /* Round size up to multiple of 32. */
-    add         SIZE, #31
-    and         SIZE, #0xFFFFFFE0
+    eor		r3, r4, r4         // r3 = 0
+    add         r4, r3, SIZE       // r4 = SIZE
+    add         r3, r3, #32        // r3 = 32
+    and         r4, r4, #31        // r4 = SIZE & 31
+    sub         r3, r3, r4         // r3 = 32 - (SIZE & 31)
+    add         SIZE, SIZE, r3     // SIZE += 32 - (SIZE & 31)
 0:
-    /* Aligned load from the source (framebuffer). */
-    ldmia       SRC, {r4, r7}
-    ldmia       SRC, {r8, r11}
-    stmia       DST, {r4, r7}
+    /*
+     * Aligned load from the source (framebuffer).
+     * The following lines of code were unceremoniously extracted
+     * from Simon H and tufty's memcpy inner loop used in
+     * Raspbian memcpy.
+      */
+    ldmia       SRC!, {r4, r7}
+    ldmia       SRC!, {r8, r11}
+    stmia       DST!, {r4, r7}
     pld         [SRC, #128]
     subs        SIZE, SIZE, #32
-    stmia       DST, {r8-r11}
-    bne         0b
-
+    stmia       DST!, {r8, r11}
+    bne          0b
+1:
     pop         {r4, r11}
     bx          lr
 
