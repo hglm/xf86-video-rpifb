@@ -537,6 +537,7 @@ RPIAccel *RPIAccel_Init(ScreenPtr pScreen, blt2d_i *blt2d, blt2d_i *blt2d_cpu_ba
     private->blt2d_self = blt2d->self;
     private->blt2d_cpu_backend = blt2d_cpu_backend;
     private->blt2d_overlapped_blt = blt2d->overlapped_blt;
+    private->blt2d_standard_blt = blt2d->standard_blt;
     private->blt2d_fill = blt2d->fill;
 
     /* Wrap the current CopyWindow function */

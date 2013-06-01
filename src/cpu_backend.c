@@ -267,6 +267,7 @@ cpu_backend_t *cpu_backend_init(uint8_t *uncached_buffer,
     }
 #endif
     ctx->blt2d.overlapped_blt = overlapped_blt_arm;
+    ctx->blt2d.standard_blt = standard_blt_arm;
 #endif
 
     return ctx;

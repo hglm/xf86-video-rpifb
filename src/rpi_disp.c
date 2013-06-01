@@ -153,6 +153,7 @@ rpi_disp_t *rpi_disp_init(const char *device, void *xserver_fbmem)
 
     ctx->blt2d.self = ctx;
     ctx->blt2d.overlapped_blt = rpi_blt;
+    ctx->blt2d.standard_blt = NULL;
     ctx->blt2d.fill = rpi_fill;
 
     return ctx;
