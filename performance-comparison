@@ -1,6 +1,7 @@
 This is the comparison of the results of running benchx
 (https//github.com/hglm/benchx) on both the standard
-driver (fbdev) and the xf86-video-rpifb driver.
+driver (fbdev) and the initial version of the xf86-video-rpifb
+driver (which is now outdated).
 
 Resolution is 1280x1024, pixel depth 16bpp, 512MB RPi
 with no overclocking. The "ShadowFB" option in the

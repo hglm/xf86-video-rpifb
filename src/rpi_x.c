@@ -43,8 +43,8 @@
 
 /*
  * If USE_STANDARD_BLT is defined, use the standard_blt function from the
- * device-independent interface instead of pixman. Pixman is significantly
- * faster at the moment.
+ * device-independent interface instead of pixman. Pixman is faster at the
+ * moment.
  */
 
 /* #define USE_STANDARD_BLT */

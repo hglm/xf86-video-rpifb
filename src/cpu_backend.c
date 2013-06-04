@@ -30,6 +30,8 @@
 
 #include "cpuinfo.h"
 #include "cpu_backend.h"
+#include "arm_asm.h"
+#include "rpi_arm_asm.h"
 
 /*
  * Threshold width, below which we fall to a more compact CPU blit function,
@@ -41,30 +43,29 @@
 
 #ifdef __arm__
 
+#define ARM_MEMCPY_NO_OVERFETCH(dst, src, size) \
+    memcpy_armv5te_no_overfetch(dst, src, size);
+
+#define ARM_MEMCPY(dst, src, size) \
+    memcpy_armv5te(dst, src, size);
+
+/* Macro for the ARM cache line preload instruction. */
+#define ARM_PRELOAD(_var, _offset)\
+    asm volatile ("pld [%[address], %[offset]]" : : [address] "r" (_var), [offset] "I" (_offset));
+
 static void writeback_scratch_to_mem_arm(int size, void *dst, const void *src);
-static void aligned_fetch_fbmem_to_scratch_arm(int size, void *dst, const void *src);
 
 /*
- * We use standard memcpy, which is only optimized for the aligned case on RPi
- * it seems.
+ * Optimized assembler version of aligned_fetch_fbmem_to_scratch_arm is provided
+ * in rpi_arm_asm.S. src and dst are 32-byte aligned, size is rounded up to a
+ * multiple of 32 bytes.
  */
+
+/* This module uses optimized assembler memcpy function defined in arm_asm.S. */
 
 static void writeback_scratch_to_mem_arm(int size, void *dst, const void *src) {
-    memcpy(dst, src, size);
+    ARM_MEMCPY_NO_OVERFETCH(dst, src, size);
 }
-
-/*
- * For this function, src and dst are 32-byte aligned.
- * ARM assembler implemention is available but doesn't work yet.
- */
-
-#if 1
-
-static void aligned_fetch_fbmem_to_scratch_arm(int size, void *dst, const void *src) {
-    memcpy(dst, src, size);
-}
-
-#endif
 
 #define SCRATCHSIZE 2048
 
@@ -225,290 +226,16 @@ overlapped_blt_noop(void     *self,
     return 0;
 }
 
-/*
- * Source and destination have a different alignment within a 32-bit word (but are 16-bit aligned).
- * Source is 32-bit aligned, destination is 16-bit aligned. Common case at 16bpp.
- */
-
-static int standard_source_word_aligned_blt(uint8_t *src, uint8_t * dst, int src_stride, int dst_stride,
-int bpp, int alignshift_src, int alignshift_dst, int bw, int h) {
-        int leftmost_short = alignshift_src & 2;
-        int leftmost_words;
-        if (alignshift_src != 0)
-            leftmost_words = 8 - ((alignshift_src & 0x1B) >> 2);
-        else
-            leftmost_words = 0;
-        bw -= leftmost_short + leftmost_words * 4;
-        if (bw <= 0) {
-            // Small width (within one chunk).
-            leftmost_words -= (- bw) >> 2;
-            int rightmost_short = (- bw) & 2;
-            uint8_t *srclinep = src;
-            uint8_t *dstlinep = dst;
-            while (h > 0) {
-                int offset = 0;
-                if (leftmost_short) {
-                    *(uint16_t *)dstlinep = *(uint16_t *)srclinep;
-                    offset += 2;
-                }
-                for (int i = 0; i < leftmost_words; i++)
-                    *(uint32_t *)(dstlinep + offset + i * 4) = *(uint32_t *)(srclinep + offset + i * 4);
-                offset += leftmost_words * 4;
-                if (rightmost_short)
-                    *(uint16_t *)(dstlinep + offset) = *(uint16_t *)(srclinep + offset);
-                srclinep += src_stride * 4;
-                dstlinep += dst_stride * 4;
-                h--;
-            }
-            return 1;
-        }
-        int chunks = bw >> 5;
-        bw -= chunks << 5;
-        int rightmost_words = bw >> 2;
-        int rightmost_short = bw & 2;
-        uint8_t *srclinep = src;
-        uint8_t *dstlinep = dst;
-        while (h > 0) {
-            int offset = 0;
-            uint32_t pix;
-            /* The source is word-aligned, so the destination is not word aligned. */
-                pix = *(uint32_t *)srclinep;
-                *(uint16_t *)dstlinep = (uint16_t)pix;
-                pix >>= 16;
-                offset = 4;
-                for (int i = 0; i < leftmost_words - 1; i++) {
-                    uint32_t pix2 = *(uint32_t *)(srclinep + offset + i * 4);
-                    *(uint32_t *)(dstlinep + offset - 2 + i * 4) = pix + (pix2 << 16);
-                    pix = pix2 >> 16;
-                }
-                offset += leftmost_words * 4;
-                for (int i = 0; i < chunks; i++) {
-                     uint32_t pix2 = *(uint32_t *)(srclinep + offset);
-                     *(uint32_t *)(dstlinep + offset - 2) = pix + (pix2 << 16);
-                     pix = pix2 >> 16;
-                     pix2 = *(uint32_t *)(srclinep + offset + 4);
-                     *(uint32_t *)(dstlinep + offset + 4) = pix + (pix2 << 16);
-                     pix = pix2 >> 16;
-                     pix2 = *(uint32_t *)(srclinep + offset + 8);
-                     *(uint32_t *)(dstlinep + offset + 6) = pix + (pix2 << 16);
-                     pix = pix2 >> 16;
-                     pix2 = *(uint32_t *)(srclinep + offset + 12);
-                     *(uint32_t *)(dstlinep + offset + 10) = pix + (pix2 << 16);
-                     pix = pix2 >> 16;
-                     pix2 = *(uint32_t *)(srclinep + offset + 16);
-                     *(uint32_t *)(dstlinep + offset + 14) = pix + (pix2 << 16);
-                     pix = pix2 >> 16;
-                     pix2 = *(uint32_t *)(srclinep + offset + 20);
-                     *(uint32_t *)(dstlinep + offset + 18) = pix + (pix2 << 16);
-                     pix = pix2 >> 16;
-                     pix2 = *(uint32_t *)(srclinep + offset + 24);
-                     *(uint32_t *)(dstlinep + offset + 22) = pix + (pix2 << 16);
-                     pix = pix2 >> 16;
-                     pix2 = *(uint32_t *)(srclinep + offset + 28);
-                     *(uint32_t *)(dstlinep + offset + 26) = pix + (pix2 << 16);
-                     pix = pix2 >> 16;
-                     offset += 32;
-                }
-            for (int i = 0; i < rightmost_words; i++) {
-                uint32_t pix2 = *(uint32_t *)(srclinep + offset + i * 4);
-                *(uint32_t *)(dstlinep + offset - 2 + i *  4) = pix + (pix2 << 16);
-                pix = pix2 >> 16;
-            }
-            offset += rightmost_words * 4;
-            if (rightmost_short)
-                *(uint32_t *)(dstlinep + offset - 2) = pix + (*(uint16_t *)(srclinep + offset) << 16);
-            else
-                *(uint16_t *)(dstlinep + offset - 2) = (uint16_t)pix;
-            srclinep += src_stride * 4;
-            dstlinep += dst_stride * 4;
-            h--;
-        }
-        return 1;
-}
-
-
-/*
- * Source and destination have a different alignment within a 32-bit word (but are 16-bit aligned).
- * Source is 16-bit aligned, destination is 32-bit aligned. Common case at 16bpp.
- */
-
-static int standard_destination_word_aligned_blt(uint8_t *src, uint8_t * dst, int src_stride, int dst_stride,
-int bpp, int alignshift_src, int alignshift_dst, int bw, int h) {
-        int leftmost_short = alignshift_src & 2;
-        int leftmost_words;
-        if (alignshift_src != 0)
-            leftmost_words = 8 - ((alignshift_src & 0x1B) >> 2);
-        else
-            leftmost_words = 0;
-        bw -= leftmost_short + leftmost_words * 4;
-        if (bw <= 0) {
-            // Small width (within one chunk).
-            leftmost_words -= (- bw) >> 2;
-            int rightmost_short = (- bw) & 2;
-            uint8_t *srclinep = src;
-            uint8_t *dstlinep = dst;
-            while (h > 0) {
-                int offset = 0;
-                if (leftmost_short) {
-                    *(uint16_t *)dstlinep = *(uint16_t *)srclinep;
-                    offset += 2;
-                }
-                for (int i = 0; i < leftmost_words; i++)
-                    *(uint32_t *)(dstlinep + offset + i * 4) = *(uint32_t *)(srclinep + offset + i * 4);
-                offset += leftmost_words * 4;
-                if (rightmost_short)
-                    *(uint16_t *)(dstlinep + offset) = *(uint16_t *)(srclinep + offset);
-                srclinep += src_stride * 4;
-                dstlinep += dst_stride * 4;
-                h--;
-            }
-            return 1;
-        }
-        int chunks = bw >> 5;
-        bw -= chunks << 5;
-        int rightmost_words = bw >> 2;
-        int rightmost_short = bw & 2;
-        uint8_t *srclinep = src;
-        uint8_t *dstlinep = dst;
-        while (h > 0) {
-            int offset = 0;
-            uint32_t pix;
-            /* The source is aligned in the middle of a word, so the destination is word-aligned. */
-            pix = *(uint16_t *)srclinep;
-            offset = 2;
-            for (int i = 0; i < leftmost_words; i++) {
-                uint32_t pix2 = *(uint32_t *)(srclinep + offset + i * 4);
-                *(uint32_t *)(dstlinep + offset - 2 + i *  4) = pix + (pix2 << 16);
-                pix = pix2 >> 16;
-            }
-            offset += leftmost_words * 4;
-            for (int i = 0; i < chunks; i++) {
-                uint32_t pix2 = *(uint32_t *)(srclinep + offset);
-                *(uint32_t *)(dstlinep + offset - 2) = pix + (pix2 << 16);
-                pix = pix2 >> 16;
-                pix2 = *(uint32_t *)(srclinep + offset + 4);
-                *(uint32_t *)(dstlinep + offset + 4) = pix + (pix2 << 16);
-                pix = pix2 >> 16;
-                pix2 = *(uint32_t *)(srclinep + offset + 8);
-                *(uint32_t *)(dstlinep + offset + 6) = pix + (pix2 << 16);
-                pix = pix2 >> 16;
-                pix2 = *(uint32_t *)(srclinep + offset + 12);
-                *(uint32_t *)(dstlinep + offset + 10) = pix + (pix2 << 16);
-                pix = pix2 >> 16;
-                pix2 = *(uint32_t *)(srclinep + offset + 16);
-                *(uint32_t *)(dstlinep + offset + 14) = pix + (pix2 << 16);
-                pix = pix2 >> 16;
-                pix2 = *(uint32_t *)(srclinep + offset + 20);
-                *(uint32_t *)(dstlinep + offset + 18) = pix + (pix2 << 16);
-                pix = pix2 >> 16;
-                pix2 = *(uint32_t *)(srclinep + offset + 24);
-                *(uint32_t *)(dstlinep + offset + 22) = pix + (pix2 << 16);
-                pix = pix2 >> 16;
-                pix2 = *(uint32_t *)(srclinep + offset + 28);
-                *(uint32_t *)(dstlinep + offset + 26) = pix + (pix2 << 16);
-                pix = pix2 >> 16;
-                offset += 32;
-            }
-            for (int i = 0; i < rightmost_words; i++) {
-                uint32_t pix2 = *(uint32_t *)(srclinep + offset + i * 4);
-                *(uint32_t *)(dstlinep + offset - 2 + i *  4) = pix + (pix2 << 16);
-                pix = pix2 >> 16;
-            }
-            offset += rightmost_words * 4;
-            if (rightmost_short)
-                *(uint32_t *)(dstlinep + offset - 2) = pix + (*(uint16_t *)(srclinep + offset) << 16);
-            else
-                *(uint16_t *)(dstlinep + offset - 2) = (uint16_t)pix;
-            srclinep += src_stride * 4;
-            dstlinep += dst_stride * 4;
-            h--;
-        }
-        return 1;
-}
-
-/*
- * Source and destination have the same alignment within a 32-bit word.
- */
-
-static int standard_word_aligned_blt(uint8_t *src, uint8_t * dst, int src_stride, int dst_stride,
-int bpp, int alignshift_src, int alignshift_dst, int bw, int h) {\
-        int leftmost_short = alignshift_src & 2;
-        int leftmost_words;
-        if (alignshift_src != 0)
-            leftmost_words = 8 - ((alignshift_src & 0x1B) >> 2);
-        else
-            leftmost_words = 0;
-        bw -= leftmost_short + leftmost_words * 4;
-        if (bw <= 0) {
-            // Small width (within one chunk).
-            leftmost_words -= (- bw) >> 2;
-            int rightmost_short = (- bw) & 2;
-            uint8_t *srclinep = src;
-            uint8_t *dstlinep = dst;
-            while (h > 0) {
-                int offset = 0;
-                if (leftmost_short) {
-                    *(uint16_t *)dstlinep = *(uint16_t *)srclinep;
-                    offset += 2;
-                }
-                for (int i = 0; i < leftmost_words; i++)
-                    *(uint32_t *)(dstlinep + offset + i * 4) = *(uint32_t *)(srclinep + offset + i * 4);
-                offset += leftmost_words * 4;
-                if (rightmost_short)
-                    *(uint16_t *)(dstlinep + offset) = *(uint16_t *)(srclinep + offset);
-                srclinep += src_stride * 4;
-                dstlinep += dst_stride * 4;
-                h--;
-            }
-            return 1;
-        }
-        int chunks = bw >> 5;
-        bw -= chunks << 5;
-        int rightmost_words = bw >> 2;
-        int rightmost_short = bw & 2;
-        uint8_t *srclinep = src;
-        uint8_t *dstlinep = dst;
-        while (h > 0) {
-            int offset = 0;
-            if (leftmost_short) {
-                *(uint16_t *)dstlinep = *(uint16_t *)srclinep;
-                offset += 2;
-            }
-            for (int i = 0; i < leftmost_words; i++)
-                *(uint32_t *)(dstlinep + offset + i * 4) = *(uint32_t *)(srclinep + offset + i * 4);
-            offset += leftmost_words * 4;
-            for (int i = 0; i < chunks; i++) {
-                double f0 = *(double *)(srclinep + offset);
-                double f1 = *(double *)(srclinep + offset + 8);
-                double f2 = *(double *)(srclinep + offset + 16);
-                double f3 = *(double *)(srclinep + offset + 24);
-                *(double *)(dstlinep + offset) = f0;
-                *(double *)(dstlinep + offset + 8) = f1;
-                *(double *)(dstlinep + offset + 16) = f2;
-                *(double *)(dstlinep + offset + 24) = f3;
-                offset += 32;
-            }
-            for (int i = 0; i < rightmost_words; i++)
-                *(uint32_t *)(dstlinep + offset + i * 4) = *(uint32_t *)(srclinep + offset + i * 4);
-            offset += rightmost_words * 4;
-            if (rightmost_short)
-                *(uint16_t *)(dstlinep + offset) = *(uint16_t *)(srclinep + offset);
-            srclinep += src_stride * 4;
-            dstlinep += dst_stride * 4;
-            h--;
-        }
-        return 1;
-}
+#ifdef __arm__
 
 /*
  * Optimized standard (non-screen source) blit function.
  * The "reversed" or "upsidedown" flags must not be set in the X driver.
- * Supports 16bpp and 32bpp: even widths >= 2.
  *
- * Divides into horizontal aligned 32-byte chunks.
+ * Uses the ARM optimized assembler memcpy function.
  */
 
-static int standard_blt(void     *self,
+static int standard_blt_arm(void     *self,
                           uint32_t *src_bits,
                           uint32_t *dst_bits,
                           int       src_stride,
@@ -522,91 +249,50 @@ static int standard_blt(void     *self,
                           int       w,
                           int       h)
 {
-    uint8_t *src = (uint8_t *)src_bits + src_y * src_stride * 4 + src_x * (src_bpp / 8);
-    uint8_t *dst = (uint8_t *)dst_bits + dst_y * dst_stride * 4 + dst_x * (dst_bpp / 8);
+    uint32_t src_stride_bytes = src_stride * 4;
+    uint32_t dst_stride_bytes = dst_stride * 4;
+    uint8_t *src = (uint8_t *)src_bits + src_y * src_stride_bytes + src_x * (src_bpp / 8);
+    uintptr_t src_align32 = (uintptr_t)src & (~(uint32_t)31);
+    ARM_PRELOAD(src_align32, 0);
+    uint8_t *dst = (uint8_t *)dst_bits + dst_y * dst_stride_bytes + dst_x * (dst_bpp / 8);
     int bw = w * (src_bpp / 8);
-    uintptr_t alignshift_src = (uintptr_t)src & 31;
-    uintptr_t alignshift_dst = (uintptr_t)dst & 31;
-    if (alignshift_src != alignshift_dst) {
-        if ((alignshift_src & 3) == (alignshift_dst & 3))
-            return standard_word_aligned_blt(src, dst, src_stride, dst_stride, src_bpp,
-                alignshift_src, alignshift_dst, bw, h);
-        else
-            if ((alignshift_src & 3) == 0)
-                return standard_source_word_aligned_blt(src, dst, src_stride, dst_stride, src_bpp,
-                   alignshift_src, alignshift_dst, bw, h);
-            else
-                return standard_source_word_aligned_blt(src, dst, src_stride, dst_stride, src_bpp,
-                   alignshift_src, alignshift_dst, bw, h);
-    }
-    /* Source and destination are aligned within a 32-byte chunk. */
-        int leftmost_short = alignshift_src & 2;
-        int leftmost_words;
-        if (alignshift_src != 0)
-            leftmost_words = 8 - ((alignshift_src & 0x1B) >> 2);
-        else
-            leftmost_words = 0;
-        bw -= leftmost_short + leftmost_words * 4;
-        if (bw <= 0) {
-            // Small width (within one chunk).
-            leftmost_words -= (- bw) >> 2;
-            int rightmost_short = (- bw) & 2;
-            uint8_t *srclinep = src;
-            uint8_t *dstlinep = dst;
-            while (h > 0) {
-                int offset = 0;
-                if (leftmost_short) {
-                    *(uint16_t *)dstlinep = *(uint16_t *)srclinep;
-                    offset += 2;
-                }
-                for (int i = 0; i < leftmost_words; i++)
-                    *(uint32_t *)(dstlinep + offset + i * 4) = *(uint32_t *)(srclinep + offset + i * 4);
-                offset += leftmost_words * 4;
-                if (rightmost_short)
-                    *(uint16_t *)(dstlinep + offset) = *(uint16_t *)(srclinep + offset);
-                srclinep += src_stride * 4;
-                dstlinep += dst_stride * 4;
-                h--;
-            }
-            return 1;
+    uint8_t *srclinep = src;
+    uint8_t *dstlinep = dst;
+    if (bw >= src_stride_bytes - 64) {
+        /*
+         * If the source image scanlines are virtually contiguous to each other,
+         * use the normal (overfetching) memcpy.
+         */
+        int h_preload = 0;
+        if (src_stride_bytes <= 128)
+            h_preload = 128 / src_stride_bytes;
+        while (h > h_preload) {
+            ARM_MEMCPY(dstlinep, srclinep, bw);
+            srclinep += src_stride_bytes;
+            dstlinep += dst_stride_bytes;
+            h--;
         }
-        int chunks = bw >> 5;
-        bw -= chunks << 5;
-        int rightmost_words = bw >> 2;
-        int rightmost_short = bw & 2;
-        uint8_t *srclinep = src;
-        uint8_t *dstlinep = dst;
         while (h > 0) {
-            int offset = 0;
-            if (leftmost_short) {
-                *(uint16_t *)dstlinep = *(uint16_t *)srclinep;
-                offset += 2;
-            }
-            for (int i = 0; i < leftmost_words; i++)
-                *(uint32_t *)(dstlinep + offset + i * 4) = *(uint32_t *)(srclinep + offset + i * 4);
-            offset += leftmost_words * 4;
-            for (int i = 0; i < chunks; i++) {
-                double f0 = *(double *)(srclinep + offset);
-                double f1 = *(double *)(srclinep + offset + 8);
-                double f2 = *(double *)(srclinep + offset + 16);
-                double f3 = *(double *)(srclinep + offset + 24);
-                *(double *)(dstlinep + offset) = f0;
-                *(double *)(dstlinep + offset + 8) = f1;
-                *(double *)(dstlinep + offset + 16) = f2;
-                *(double *)(dstlinep + offset + 24) = f3;
-                offset += 32;
-            }
-            for (int i = 0; i < rightmost_words; i++)
-                *(uint32_t *)(dstlinep + offset + i * 4) = *(uint32_t *)(srclinep + offset + i * 4);
-            offset += rightmost_words * 4;
-            if (rightmost_short)
-                *(uint16_t *)(dstlinep + offset) = *(uint16_t *)(srclinep + offset);
-            srclinep += src_stride * 4;
-            dstlinep += dst_stride * 4;
+            ARM_MEMCPY_NO_OVERFETCH(dstlinep, srclinep, bw);
+            srclinep += src_stride_bytes;
+            dstlinep += dst_stride_bytes;
             h--;
         }
         return 1;
+    }
+    while (h > 1) {
+        ARM_MEMCPY_NO_OVERFETCH(dstlinep, srclinep, bw);
+        srclinep += src_stride_bytes;
+        src_align32 = (uintptr_t)srclinep & (~(uint32_t)31);
+        ARM_PRELOAD(src_align32, 0);
+        dstlinep += dst_stride_bytes;
+        h--;
+    }
+    ARM_MEMCPY_NO_OVERFETCH(dstlinep, srclinep, bw);
+    return 1;
 }
+
+#endif
 
 static int
 fill_noop(void                *self,
@@ -636,7 +322,7 @@ cpu_backend_t *cpu_backend_init(uint8_t *uncached_buffer,
     ctx->blt2d.self = ctx;
     ctx->blt2d.overlapped_blt = overlapped_blt_noop;
     /*
-     * Initialize the fill function with NULL to indicate that is not
+     * Initialize the fill function with NULL to indicate that it is not
      * available.
      */
     ctx->blt2d.fill = NULL;
@@ -650,7 +336,7 @@ cpu_backend_t *cpu_backend_init(uint8_t *uncached_buffer,
     }
 #endif
     ctx->blt2d.overlapped_blt = overlapped_blt_arm;
-    ctx->blt2d.standard_blt = NULL; /* standard_blt; */
+    ctx->blt2d.standard_blt = standard_blt_arm;
 #endif
 
     return ctx;

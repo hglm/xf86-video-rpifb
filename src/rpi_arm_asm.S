@@ -20,7 +20,10 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  *
- * Adapted for RPi: Copyright 2013 Harm Hanemaaijer (fgenfb@yahoo.com)
+ * Modified by Harm Hanemaaijer <fgenfb@yahoo.com>:
+ * 1. Add ".type <function_name>, function" to function definition macro, which
+ *    was required for correct linkage on my platform.
+ * 2. Implement aligned_fetch_fbmem_to_scratch_arm based on armv5te_memcpy.
  */
 
 /* Prevent the stack from becoming executable */
@@ -44,10 +47,9 @@
 .macro asm_function function_name
     .global \function_name
 .func \function_name
+.type \function_name, function
 \function_name:
 .endm
-
-/******************************************************************************/
 
 /*
  * aligned_fetch_fbmem_to_scratch_arm(int numbytes, void *scratch, void *fbmem)
@@ -64,32 +66,39 @@
  */
 
 asm_function aligned_fetch_fbmem_to_scratch_arm
-    SIZE        .req r0
-    DST         .req r1
-    SRC         .req r2
-
-    push        {r4, r11}
-    /* Round size up to multiple of 32. */
-    eor		r3, r4, r4         // r3 = 0
-    add         r4, r3, SIZE       // r4 = SIZE
-    add         r3, r3, #32        // r3 = 32
-    and         r4, r4, #31        // r4 = SIZE & 31
-    sub         r3, r3, r4         // r3 = 32 - (SIZE & 31)
-    add         SIZE, SIZE, r3     // SIZE += 32 - (SIZE & 31)
-0:
-    /*
-     * Aligned load from the source (framebuffer).
-     * To be implemented.
-     */
-    subs        SIZE, SIZE, #32
-    bne          0b
+    add     r0, r0, #31
+    pld     [r2, #0]
+    bic     r0, r0, #31
+    stmfd   sp!, {r4-r7}
+    cmp     r0, #96
+    stmfd   sp!, {r8-r11}
+    mov     r9, #32           /* Prefetch offset 32. */
+    /* Only do prefetch for chunks we are actually going to read. */
+    blt     2f
+    pld     [r2, r9]
 1:
-    pop         {r4, r11}
-    bx          lr
+    ldr     r11, [r1]         /* Fetch destination into L1 cache. */
+    sub     r0, r0, #32
+    ldmia   r2!, {r3-r6, r7, r8, r10, r11}
+    cmp     r0, #96
+    pld     [r2, r9]
+    stmia   r1!, {r3-r6}
+    stmia   r1!, {r7, r8, r10, r11}
+    bge     1b
+2:
+    ldr     r11, [r1]
+    sub     r0, r0, #32
+    ldmia   r2!, {r3-r6, r7, r8, r10, r11}
+    cmp     r0, #32
+    stmia   r1!, {r3-r6}
+    stmia   r1!, {r7, r8, r10, r11}
+    bge     2b
 
-    .unreq      SIZE
-    .unreq      DST
-    .unreq      SRC
+    ldmfd   sp!, {r8-r11}
+    ldmfd   sp!, {r4-r7}
+
+    bx      lr
+
 .endfunc
 
 #endif
