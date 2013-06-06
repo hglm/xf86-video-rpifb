@@ -82,6 +82,32 @@ PixmapFillRect (15 x 15): Slow down 7%
 PixmapFillRect (22 x 22): Slow down 5%
 XRenderShmPixmap (163 x 163): Slow down 8%
 
+An updated version of benchx show a nice improvement in certain off-screen
+to screen copies that may be common in applications:
+
+ShmPutImageFullWidth (10 x 10): Speed up 7%
+ShmPutImageFullWidth (15 x 15): Speed up 9%
+ShmPutImageFullWidth (22 x 22): Speed up 15%
+ShmPutImageFullWidth (33 x 33): Speed up 16%
+ShmPutImageFullWidth (49 x 49): Speed up 34%
+ShmPutImageFullWidth (73 x 73): Speed up 49%
+ShmPutImageFullWidth (109 x 109): Speed up 70%
+ShmPutImageFullWidth (163 x 163): Speed up 106%
+ShmPutImageFullWidth (244 x 244): Speed up 135%
+ShmPutImageFullWidth (366 x 366): Speed up 132%
+ShmPutImageFullWidth (549 x 549): Speed up 141%
+AlignedShmPutImageFullWidth (15 x 15): Speed up 5%
+AlignedShmPutImageFullWidth (22 x 22): Slow down 11%, CPU usage decrease from 95% to 75%
+AlignedShmPutImageFullWidth (33 x 33): Speed up 21%
+AlignedShmPutImageFullWidth (49 x 49): Speed up 37%
+AlignedShmPutImageFullWidth (73 x 73): Speed up 55%
+AlignedShmPutImageFullWidth (109 x 109): Speed up 87%
+AlignedShmPutImageFullWidth (163 x 163): Speed up 136%
+AlignedShmPutImageFullWidth (244 x 244): Speed up 101%
+AlignedShmPutImageFullWidth (366 x 366): Speed up 168%
+AlignedShmPutImageFullWidth (549 x 549): Speed up 198%
+
+
 With "ShadowFB" set to "on":
 
 Processed 209 results in fbdev-shadowfb-16bpp.out.
