@@ -27,3 +27,16 @@ and copy the default xorg.conf subfile to the right location:
 
 A man page is available (rpifb).
 
+Note on the default Raspberry Pi window manager configuration used in Raspbian:
+
+The default window manager configuration used by Raspbian seems to do a lot of
+buffering and shadowing doesn't seems to use screen-to-screen blits directly when
+dragging windows. That's why this operation is laggy even with the driver enabled.
+
+To experiment with a more streamlined environment, create the file .xinitrc in
+your home directory with the single line:
+
+	openbox
+
+This will start an uncustomized openbox environment in which, for example, dragging
+windows more directly reflects the intrinsic graphic operation speed.
