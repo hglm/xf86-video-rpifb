@@ -23,7 +23,8 @@
 # -avoid-version prevents gratuitous .0.0.0 version numbers on the end
 # _ladir passes a dummy rpath to libtool so the thing will actually link
 # TODO: -nostdlib/-Bstatic/-lgcc platform magic, not installing the .a, etc.
-AM_CFLAGS = @XORG_CFLAGS@ -march=armv6j -DARM_ALIGN=32
+AM_CFLAGS = @XORG_CFLAGS@ -march=armv6j
+AM_CPPFLAGS = -DRPI_BEST_MEMCPY_ONLY
 rpifb_drv_la_LTLIBRARIES = rpifb_drv.la
 rpifb_drv_la_LDFLAGS = -module -avoid-version
 rpifb_drv_ladir = @moduledir@/drivers
