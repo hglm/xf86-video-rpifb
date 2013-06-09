@@ -17,6 +17,10 @@ Compile by running:
 	./configure --prefix=/usr
 	make
 
+Note that might have to rerun autoreconf and configure after pulling in changes.
+Failure to do may result in a crashing driver, and since undefined symbols
+are not flagged during the compile process there may be no warning.
+
 Then install:
 
 	sudo make install
