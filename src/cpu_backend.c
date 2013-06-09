@@ -47,7 +47,7 @@
     memcpy_armv5te_no_overfetch(dst, src, size);
 
 #define ARM_MEMCPY(dst, src, size) \
-    memcpy_armv5te(dst, src, size);
+    memcpy_armv5te_overfetch(dst, src, size);
 
 /* Macro for the ARM cache line preload instruction. */
 #define ARM_PRELOAD(_var, _offset)\
